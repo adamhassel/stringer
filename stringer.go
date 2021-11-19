@@ -63,6 +63,18 @@
 //	PillAspirin // Aspirin
 //
 // to suppress it in the output.
+//
+// The -bitmask flag tells stringer to generate all bitmask constants composing the value.
+// With the previous example, by replacing the first constant definition by
+//
+//  Placebo Pill = 1 << iota
+//
+// the value Pill(42) would return
+//
+//  Pill(Aspirin|Paracetamol|0x20)
+//
+//  where constants not existing in the type definition are returned as their hexadecimal value.
+
 package main // import "github.com/adamhassel/stringer"
 
 import (
@@ -90,6 +102,7 @@ var (
 	trimprefix  = flag.String("trimprefix", "", "trim the `prefix` from the generated constant names")
 	linecomment = flag.Bool("linecomment", false, "use line comment text as printed text when present")
 	buildTags   = flag.String("tags", "", "comma-separated list of build tags to apply")
+	bitmask     = flag.Bool("bitmask", false, "outputs all bitmask constants present in the value")
 )
 
 // Usage is a replacement usage function for the flags package.
@@ -130,6 +143,7 @@ func main() {
 	g := Generator{
 		trimPrefix:  *trimprefix,
 		lineComment: *linecomment,
+		bitmask:     *bitmask,
 	}
 	// TODO(suzmue): accept other patterns for packages (directories, list of files, import paths, etc).
 	if len(args) == 1 && isDirectory(args[0]) {
@@ -187,6 +201,7 @@ type Generator struct {
 
 	trimPrefix  string
 	lineComment bool
+	bitmask     bool
 }
 
 func (g *Generator) Printf(format string, args ...interface{}) {
@@ -288,6 +303,8 @@ func (g *Generator) generate(typeName string) {
 	// is very low. And bitmasks probably deserve their own analysis,
 	// to be done some other day.
 	switch {
+	case g.bitmask:
+		g.buildMap(runs, typeName)
 	case len(runs) == 1:
 		g.buildOneRun(runs, typeName)
 	case len(runs) <= 10:
@@ -642,7 +659,11 @@ func (g *Generator) buildMap(runs [][]Value, typeName string) {
 		}
 	}
 	g.Printf("}\n\n")
-	g.Printf(stringMap, typeName)
+	if g.bitmask {
+		g.Printf(StringMapBitMask, typeName)
+	} else {
+		g.Printf(stringMap, typeName)
+	}
 }
 
 // Argument to format is the type name.
@@ -652,4 +673,27 @@ const stringMap = `func (i %[1]s) String() string {
 	}
 	return "%[1]s(" + strconv.FormatInt(int64(i), 10) + ")"
 }
+`
+
+// Argument to format is the type name.
+const StringMapBitMask = `func (i %[1]s) String() string {
+	if i <= 0 {
+		return "%[1]s()"
+	}
+	sb := make([]byte, 0, len(_%[1]s_name)/2)
+	sb = append(sb, []byte("%[1]s(")...)
+	for mask := %[1]s(1); mask <= i; mask <<= 1 {
+		val := i & mask
+		if val == 0 {
+			continue
+		}
+		str, ok := _%[1]s_map[val]
+		if !ok {
+			str = "0x" + strconv.FormatUint(uint64(val), 16)
+		}
+		sb = append(sb, []byte(str)...)
+		sb = append(sb, '|')
+	}
+	sb[len(sb)-1] = ')'
+	return string(sb)}
 `
