@@ -686,7 +686,7 @@ const StringMapBitMask = `func (i %[1]s) String() string {
 		}
 		return "%[1]s()"
 	}
-	var sb strings.Builder
+	sb := make([]string,0,len(_%[1]s_name)/2)
 	for mask := %[1]s(1); mask <= i; mask <<= 1 {
 		val := i & mask
 		if val == 0 {
@@ -696,9 +696,8 @@ const StringMapBitMask = `func (i %[1]s) String() string {
 		if !ok {
 			str = "0x" + strconv.FormatUint(uint64(val), 16)
 		}
-		sb.WriteString(str)
-		sb.WriteByte('|')
+		sb = append(sb, str)
 	}
-	return sb.String()
+	return strings.Join(sb, "|")
 }
 `
