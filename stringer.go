@@ -163,6 +163,9 @@ func main() {
 	g.Printf("package %s", g.pkg.name)
 	g.Printf("\n")
 	g.Printf("import \"strconv\"\n") // Used by all methods.
+	if g.bitmask {
+		g.Printf("import \"strings\"\n") // Bitmasks uses strings.Builder
+	}
 
 	// Run generate for each type.
 	for _, typeName := range types {
@@ -678,10 +681,12 @@ const stringMap = `func (i %[1]s) String() string {
 // Argument to format is the type name.
 const StringMapBitMask = `func (i %[1]s) String() string {
 	if i <= 0 {
+		if v, ok := _%[1]s_map[i]; ok {
+			return v
+		}
 		return "%[1]s()"
 	}
-	sb := make([]byte, 0, len(_%[1]s_name)/2)
-	sb = append(sb, []byte("%[1]s(")...)
+	var sb strings.Builder
 	for mask := %[1]s(1); mask <= i; mask <<= 1 {
 		val := i & mask
 		if val == 0 {
@@ -691,9 +696,9 @@ const StringMapBitMask = `func (i %[1]s) String() string {
 		if !ok {
 			str = "0x" + strconv.FormatUint(uint64(val), 16)
 		}
-		sb = append(sb, []byte(str)...)
-		sb = append(sb, '|')
+		sb.WriteString(str)
+		sb.WriteByte('|')
 	}
-	sb[len(sb)-1] = ')'
-	return string(sb)}
+	return sb.String()
+}
 `
